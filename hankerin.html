@@ -1,0 +1,351 @@
+<!doctype html>
+<!--
+	Hankerin Rocket Jocks - an HTML5 game written for the Ludum Dare 27
+	Copyright (C) 2013 Jonas "sanojian" Olmstead
+	
+	Thanks for box2dweb and raphaeljs!
+-->
+<html>
+	<title>Hankerin Rocket Jocks</title>
+	<head>
+	
+		<script type="text/javascript" src="./includes/box2dweb/Box2dWeb-2.1.a.3.js"></script>
+		<script type="text/javascript" src="./includes/raphael2.js"></script>
+		<link href='//fonts.googleapis.com/css?family=Orbitron' rel='stylesheet' type='text/css'>
+
+		<script>
+
+var g_game = {
+	frame: 0,
+	worldScale: 30,
+	rocket_vY: 0,
+	bodies: [],
+	overlays: [],
+	score: 0,
+	points: [],
+	origAcc: 0.008,
+	curLevel: 0,
+	curShape: 0,
+	objSize: 30,
+	font: "'Orbitron', sans-serif"
+};
+		
+var g_shapes = [
+	{ name: 'box', vert: [[[0,0],[2,0],[2,2],[0,2]]] },
+	{ name: 'triangle', vert: [[[1,0],[2,2],[0,2]]] },
+	{ name: 'L', vert: [[[0,0],[2,0],[2,2],[0,2]],[[0,2],[4,2],[4,4],[0,4]]] },
+];
+
+var g_levels = [
+	{ title: 'INTRO', shapes: [0,1,2], points: 300 },
+	{ title: 'TOUGHER', shapes: [0, 2], points: 400 }
+
+];
+
+function showSplash(bTestWin) {
+
+	g_game.bSplash = true;
+	g_game.frame = 0;
+
+	g_game.splash[2].attr( { text: 'LEVEL: ' + (g_game.curLevel + 1) });
+	g_game.splash[3].attr( { text: g_levels[g_game.curLevel].title });
+	g_game.splash[4].attr( { text: 'NEED: $' + g_levels[g_game.curLevel].points });
+	if (bTestWin) {
+		g_game.splash[5].attr( { text: 'GOT: $' + g_game.score });
+		if (g_game.score >= g_levels[g_game.curLevel].points) {
+			g_game.splash[6].attr({ text: 'SUCCESS!', fill: '#81A100' });
+			g_game.curLevel += 1;
+		}
+		else {
+			g_game.splash[6].attr({ text: 'FAIL', fill: '#7B2008' });
+		}
+		g_game.splash.unclick().click(function() {
+			startLevel();
+		});
+
+	}
+	else {
+		g_game.splash.unclick().click(function() {
+			g_game.bSplash = false;
+			g_game.splash.hide();
+		});
+	
+	}
+	
+	g_game.bSplash = true;
+	g_game.splash.show();
+	if (!bTestWin) {
+		g_game.splash[5].hide();
+		g_game.splash[6].hide();
+	}
+}
+
+function startLevel() {
+	g_game.rocket.SetLinearVelocity(new Box2D.Common.Math.b2Vec2(0, 0));	
+	g_game.rocket.SetPosition({ x: 200/g_game.worldScale, y: 415/g_game.worldScale });
+	g_game.rocket.SetAwake(false);
+	while (g_game.overlays.length) {
+		var overlay = g_game.overlays.pop();
+		overlays.remove();
+	}
+	
+	g_game.launchAcc = g_game.origAcc;
+	g_game.bLaunched = false;
+	showSplash(false);
+}
+
+function init() {
+	var b2Vec2 = Box2D.Common.Math.b2Vec2;
+	var b2AABB = Box2D.Collision.b2AABB;
+	var b2BodyDef = Box2D.Dynamics.b2BodyDef;
+	var b2Body = Box2D.Dynamics.b2Body;
+	var b2FixtureDef = Box2D.Dynamics.b2FixtureDef;
+	var b2Fixture = Box2D.Dynamics.b2Fixture;
+	var b2World = Box2D.Dynamics.b2World;
+	var b2PolygonShape = Box2D.Collision.Shapes.b2PolygonShape;
+	var b2DebugDraw = Box2D.Dynamics.b2DebugDraw;
+     
+	var worldScale = g_game.worldScale;
+	
+	var world = new b2World(new b2Vec2(0, 10),true);
+	g_game.world = world;
+	
+	var canvasPosition = getElementPosition(document.getElementById("canvas"));
+	
+	debugDraw();             
+	
+	createBox(640,30,320,480,b2Body.b2_staticBody);
+	createBox(30,480,0,240,b2Body.b2_staticBody);
+	createBox(30,480,640,240,b2Body.b2_staticBody);
+	
+	g_game.rocket = createBox(120, 30, 200, 415, b2Body.b2_kinematicBody);
+	
+	var holder = document.getElementById('raphHolder');
+	holder.style.left = '0px';
+	holder.style.top = '0px';
+	g_game.raphPaper = Raphael("raphHolder");
+	g_game.preview = g_game.raphPaper.path().attr({ fill: '#999', opacity: 0.3 });
+	g_game.preview.transform('t540,20');
+	g_game.raphPaper.rect(510,0,110,110).attr({ stroke: '#fff', 'stroke-width': 4 });
+	g_game.astro = g_game.raphPaper.image('./images/astro.png', 420, 10, 96, 96);
+	g_game.imgRocket = g_game.raphPaper.image('./images/rocket.png', 140, 0, 120, 480).attr({ opacity: 1 });
+	g_game.dropZone = g_game.raphPaper.rect(140, 100, 120, 240).attr({ fill: '#999', opacity: 0 });
+	
+	//g_game.raphPaper.setViewBox(0, 0, g_game.raphPaper.width/worldScale, g_game.raphPaper.height/worldScale);
+	g_game.timer = g_game.raphPaper.text(560, 140, '10').attr({ stroke: '#fff', fill: '#fff', 'font-size': '48pt', 'font-family': g_game.font });
+	g_game.scoreText = g_game.raphPaper.text(500, 400, '0').attr({ stroke: '#fff', fill: '#fff', 'font-size': '48pt', 'font-family': g_game.font });
+	
+	g_game.splash = g_game.raphPaper.set();
+	g_game.splash.push(g_game.raphPaper.rect(140, 120, 360, 260).attr({ stroke: '#fff', fill: '#397E00', 'stroke-width': 6}));
+	g_game.splash.push(g_game.raphPaper.text(320, 150, 'HANDERKIN\' ROCKET JOCKS').attr({ stroke: '#C4B59F', fill: '#C4B59F', opacity: 0.4, 'font-weight': 'bold', 'font-size': '20pt', 'font-family': g_game.font }));
+	g_game.splash.push(g_game.raphPaper.text(320, 190, 'LEVEL: 1').attr({ stroke: '#C4B59F', fill: '#C4B59F', 'font-weight': 'bold', 'font-size': '20pt', 'font-family': g_game.font }));
+	g_game.splash.push(g_game.raphPaper.text(320, 210, g_levels[g_game.curLevel].title).attr({ stroke: '#C4B59F', fill: '#C4B59F', 'font-weight': 'bold', 'font-size': '20pt', 'font-family': g_game.font }));
+	g_game.splash.push(g_game.raphPaper.text(320, 250, 'NEED: $' + g_levels[g_game.curLevel].points).attr({ stroke: '#C4B59F', fill: '#C4B59F', 'font-weight': 'bold', 'font-size': '22pt', 'font-family': g_game.font }));
+	g_game.splash.push(g_game.raphPaper.text(320, 270, 'GOT:  $' + g_levels[g_game.curLevel].points).attr({ stroke: '#C4B59F', fill: '#C4B59F', 'font-weight': 'bold', 'font-size': '22pt', 'font-family': g_game.font }));
+	g_game.splash.push(g_game.raphPaper.text(320, 320, 'SUCCESS!').attr({ stroke: '#1C2222', fill: '#81A100', 'stroke-width': 3, 'font-weight': 'bold', 'font-size': '48pt', 'font-family': g_game.font }));
+	g_game.splash.push(g_game.raphPaper.text(320, 360, 'CLICK TO CONTINUE').attr({ stroke: '#C4B59F', opacity: 0.3, fill: '#C4B59F', 'font-weight': 'bold', 'font-size': '18pt', 'font-family': g_game.font }));
+	//showSplash(false);
+	
+	startLevel();
+	
+	g_game.dropZone.click(function(e) {
+		if (g_game.bLaunched) {
+			return;
+		}
+		var cx = e.clientX-canvasPosition.x;
+		var cy = e.clientY-canvasPosition.y;
+		var size = g_game.objSize;
+		var shape = g_shapes[g_game.curShape];
+		g_game.curShape = (g_game.curShape + 1) % g_levels[g_game.curLevel].shapes.length;
+		previewShape();
+		
+		var body = createPolygon(cx, cy, shape, g_game.objSize);
+		g_game.bodies.push(body);
+		
+		var path = '';
+		for (var p=0;p<shape.vert.length;p++) {
+			for (var i=0;i<shape.vert[p].length;i++) {
+				path += (i == 0 ? 'M' : 'L') + (shape.vert[p][i][0] * size/2) + ' ' + (shape.vert[p][i][1] * size/2);
+			}
+		}
+		
+		var overlay = g_game.raphPaper.path(path).attr({ fill: '#999', opacity: 1 });
+		overlay.game_size = size;
+		g_game.overlays.push(overlay);
+	});
+	
+	function createBox(width,height,pX,pY,type){
+		var bodyDef = new b2BodyDef;
+		bodyDef.type = type;
+		bodyDef.position.Set(pX/worldScale,pY/worldScale);
+		var polygonShape = new b2PolygonShape;
+		polygonShape.SetAsBox(width/2/worldScale,height/2/worldScale);
+		var fixtureDef = new b2FixtureDef;
+		fixtureDef.density = 1.0;
+		fixtureDef.friction = 0.5;
+		fixtureDef.restitution = 0.5;
+		fixtureDef.shape = polygonShape;
+		var body=world.CreateBody(bodyDef);
+		body.CreateFixture(fixtureDef);
+		return body;
+	}
+	
+	function createPolygon(cx, cy, shape, size) {
+		var bodyDef = new b2BodyDef();
+		bodyDef.type = b2Body.b2_dynamicBody;
+		bodyDef.position.Set(cx/worldScale, cy/worldScale);
+		var body = world.CreateBody(bodyDef);
+		
+		for (var p=0;p<shape.vert.length;p++) {
+			var vecs = [];
+			for(var i=0;i<shape.vert[p].length;i++) {
+				var cc = new b2Vec2();
+				cc.Set((size/2) * shape.vert[p][i][0]/worldScale, (size/2) * shape.vert[p][i][1]/worldScale);
+				vecs[i] = cc;
+			}
+			var fixtureDef = new b2FixtureDef;
+			fixtureDef.density = 1.0;
+			fixtureDef.friction = 0.5;
+			fixtureDef.restitution = 0.5;
+			fixtureDef.shape = new b2PolygonShape;
+			fixtureDef.shape.SetAsArray(vecs,vecs.length);
+			body.CreateFixture(fixtureDef);
+			
+		}
+		
+		return body;
+	}
+	
+	function debugDraw(){
+		var debugDraw = new b2DebugDraw();
+		debugDraw.SetSprite(document.getElementById("canvas").getContext("2d"));
+		debugDraw.SetDrawScale(30.0);
+		debugDraw.SetFillAlpha(0.5);
+		debugDraw.SetLineThickness(1.0);
+		debugDraw.SetFlags(b2DebugDraw.e_shapeBit | b2DebugDraw.e_jointBit);
+		world.SetDebugDraw(debugDraw);
+	}
+		
+	//http://js-tut.aardon.de/js-tut/tutorial/position.html
+	function getElementPosition(element) {
+		var elem=element, tagname="", x=0, y=0;
+		while((typeof(elem) == "object") && (typeof(elem.tagName) != "undefined")) {
+			y += elem.offsetTop;
+			x += elem.offsetLeft;
+			tagname = elem.tagName.toUpperCase();
+			if(tagname == "BODY"){
+				elem=0;
+			}
+			if(typeof(elem) == "object"){
+				if(typeof(elem.offsetParent) == "object"){
+					elem = elem.offsetParent;
+				}
+			}
+		}
+		return {x: x, y: y};
+	}
+
+	// start the game
+	(function animloop(){
+		requestAnimFrame(animloop);
+		doGameLoop();
+	})();
+
+}
+
+// shim layer with setTimeout fallback
+window.requestAnimFrame = (function(){
+  return  window.requestAnimationFrame       ||
+          window.webkitRequestAnimationFrame ||
+          window.mozRequestAnimationFrame    ||
+          function( callback ){
+            window.setTimeout(callback, 1000 / 60);
+          };
+})();
+
+function previewShape() {
+	var shape = g_shapes[g_game.curShape];
+	var path = '';
+	for (var p=0;p<shape.vert.length;p++) {
+		for (var i=0;i<shape.vert[p].length;i++) {
+			path += (i == 0 ? 'M' : 'L') + (shape.vert[p][i][0] * g_game.objSize/2) + ' ' + (shape.vert[p][i][1] * g_game.objSize/2);
+		}
+	}
+	
+	g_game.preview.attr({ path: path });
+	
+}
+	
+function doGameLoop() {
+	
+	if (g_game.bSplash) {
+		return;
+	}
+	else if (g_game.bLaunched) {
+		g_game.launchAcc += 0.0005;
+		g_game.rocket_vY -= g_game.launchAcc;
+		g_game.rocket.SetLinearVelocity(new Box2D.Common.Math.b2Vec2(0, g_game.rocket_vY));	
+	}
+	else if (g_game.frame % 60 == 0) {
+		var timeLeft = 5 - Math.floor(g_game.frame/60);
+		g_game.timer.attr({ text: timeLeft });
+		if (timeLeft <= 0) {
+			// LAUNCH!!
+			g_game.preview.hide();
+			g_game.rocket.SetAwake(true);
+			g_game.bLaunched = true;
+		}
+		else {
+			g_game.curShape = (g_game.curShape + 1) % g_levels[g_game.curLevel].shapes.length;
+			previewShape();
+		}
+	}
+			
+	g_game.world.Step(1/60,10,10);
+	g_game.world.DrawDebugData();
+	g_game.world.ClearForces();
+
+	for (var i=0;i<g_game.bodies.length;i++) {
+		var angle = Math.atan2(g_game.bodies[i].m_xf.R.col1.y, g_game.bodies[i].m_xf.R.col1.x);
+		var x = g_game.bodies[i].m_xf.position.x*g_game.worldScale;
+		var y = g_game.bodies[i].m_xf.position.y*g_game.worldScale;
+		g_game.overlays[i].transform('t' + x + ',' + y + 'r' + (angle * 180 / Math.PI) + ',0,0');
+		
+		if (g_game.bLaunched && !g_game.overlays[i].game_counted && y < 80) {
+			g_game.score += 100;
+			g_game.scoreText.attr({ text: g_game.score });
+			g_game.points.push(g_game.raphPaper.text(x, y, 100).attr({ fill: '#fff', 'font-family': g_game.font, 'font-size': '18pt' }));
+			g_game.overlays[i].game_counted = true;
+			g_game.overlays[i].hide();
+		}									
+	}
+	g_game.imgRocket.attr({ y: g_game.rocket.m_xf.position.y*g_game.worldScale - 415 });
+	if (g_game.rocket.m_xf.position.y*g_game.worldScale < -200) {
+		showSplash(true);
+	}
+	
+	g_game.frame++;
+	
+}
+		</script>
+		<style>
+		
+			body {
+				margin: 0;
+			}
+
+			*.unselectable {
+			   -moz-user-select: -moz-none;
+			   -khtml-user-select: none;
+			   -webkit-user-select: none;
+			   -ms-user-select: none;
+			   user-select: none;
+			}			
+		</style>
+		
+	</head>
+	<body onload="init()">
+		<canvas id="canvas" width="640" height="480" style="background-color:#333333;" ></canvas>
+		<div id="raphHolder" unselectable="on" class="unselectable" style="position: absolute; width: 640px; height: 480px;" />
+	</body>
+</html>
