@@ -9,14 +9,16 @@
 	<title>Hankerin Rocket Jocks</title>
 	<head>
 	
-		<script type="text/javascript" src="./includes/box2dweb/Box2dWeb-2.1.a.3.js"></script>
+		<script type="text/javascript" src="./includes/box2dweb/Box2dWeb-2.1.a.3.min.js"></script>
 		<script type="text/javascript" src="./includes/raphael2.js"></script>
+		<script type="text/javascript" src="./includes/buzz.min.js"></script>
 		<link href='//fonts.googleapis.com/css?family=Orbitron' rel='stylesheet' type='text/css'>
 
 		<script>
 
 var g_game = {
 	frame: 0,
+	sounds: [],
 	worldScale: 30,
 	rocket_vY: 0,
 	bodies: [],
@@ -26,19 +28,20 @@ var g_game = {
 	origAcc: 0.008,
 	curLevel: 0,
 	curShape: 0,
-	objSize: 30,
+	objSize: 36,
 	font: "'Orbitron', sans-serif"
 };
 		
 var g_shapes = [
-	{ name: 'box', vert: [[[0,0],[2,0],[2,2],[0,2]]] },
-	{ name: 'triangle', vert: [[[1,0],[2,2],[0,2]]] },
-	{ name: 'L', vert: [[[0,0],[2,0],[2,2],[0,2]],[[0,2],[4,2],[4,4],[0,4]]] },
+	{ image: 'burger', vert: [[[0,0],[3,0],[3,2],[0,2]]], w: 54, h: 36  },
+	{ image: 'pizza', vert: [[[2,0],[4,4],[0,4]]], w: 72, h: 72 },
+	//{ image: 'pizza', vert: [[[0,0],[2,0],[2,2],[0,2]],[[0,2],[4,2],[4,4],[0,4]]], w: 72, h: 72 },
+	{ image: 'chicken', vert: [[[0,0],[2,0],[2,2],[0,2]],[[2,0.5],[4,0.5],[4,1.5],[2,1.5]]], w: 72, h: 36 },
 ];
 
 var g_levels = [
-	{ title: 'INTRO', shapes: [0,1,2], points: 300 },
-	{ title: 'TOUGHER', shapes: [0, 2], points: 400 }
+	{ title: 'INTRO', shapes: [0,1,2], points: 300, special: 0 },
+	{ title: 'TOUGHER', shapes: [0, 2], points: 400, special: 1 }
 
 ];
 
@@ -54,7 +57,7 @@ function showSplash(bTestWin) {
 		g_game.splash[5].attr( { text: 'GOT: $' + g_game.score });
 		if (g_game.score >= g_levels[g_game.curLevel].points) {
 			g_game.splash[6].attr({ text: 'SUCCESS!', fill: '#81A100' });
-			g_game.curLevel += 1;
+			g_game.curLevel = Math.min(g_game.curLevel + 1, g_levels.length-1);
 		}
 		else {
 			g_game.splash[6].attr({ text: 'FAIL', fill: '#7B2008' });
@@ -83,13 +86,24 @@ function showSplash(bTestWin) {
 function startLevel() {
 	g_game.rocket.SetLinearVelocity(new Box2D.Common.Math.b2Vec2(0, 0));	
 	g_game.rocket.SetPosition({ x: 200/g_game.worldScale, y: 415/g_game.worldScale });
-	g_game.rocket.SetAwake(false);
 	while (g_game.overlays.length) {
 		var overlay = g_game.overlays.pop();
-		overlays.remove();
+		overlay.remove();
+	}
+	while (g_game.bodies.length) {
+		var body = g_game.bodies.pop();
+		g_game.world.DestroyBody(body);
+	}
+	while (g_game.points.length) {
+		var point = g_game.points.pop();
+		point.remove();
 	}
 	
+	var specialShape = g_shapes[g_levels[g_game.curLevel].special];
+	g_game.special.attr({ src: './images/' + specialShape.image + '.png', width: specialShape.w, height: specialShape.h });
+	g_game.score = 0;
 	g_game.launchAcc = g_game.origAcc;
+	g_game.rocket_vY = 0;
 	g_game.bLaunched = false;
 	showSplash(false);
 }
@@ -106,6 +120,21 @@ function init() {
 	var b2DebugDraw = Box2D.Dynamics.b2DebugDraw;
      
 	var worldScale = g_game.worldScale;
+	
+	g_game.sounds.points = new buzz.sound( "./audio/points", {
+		formats: [ "wav" ]
+	});
+	var volume = 40;
+	for (var i=10;i>=0;i--) {
+		g_game.sounds[i] = new buzz.sound( "./audio/" + i, {	
+			formats: [ "wav" ]	
+		});
+		g_game.sounds[i].setVolume(volume);
+	}
+	g_game.sounds.rocket = new buzz.sound( "./audio/rocket", {
+		formats: [ "wav" ]	
+	});
+	g_game.sounds.rocket.setVolume(60);
 	
 	var world = new b2World(new b2Vec2(0, 10),true);
 	g_game.world = world;
@@ -124,16 +153,20 @@ function init() {
 	holder.style.left = '0px';
 	holder.style.top = '0px';
 	g_game.raphPaper = Raphael("raphHolder");
-	g_game.preview = g_game.raphPaper.path().attr({ fill: '#999', opacity: 0.3 });
-	g_game.preview.transform('t540,20');
-	g_game.raphPaper.rect(510,0,110,110).attr({ stroke: '#fff', 'stroke-width': 4 });
-	g_game.astro = g_game.raphPaper.image('./images/astro.png', 420, 10, 96, 96);
+	//g_game.preview = g_game.raphPaper.path().attr({ fill: '#999', opacity: 0.3 });
+	g_game.preview = g_game.raphPaper.image().attr({ opacity: 0.9 });
+	g_game.preview.transform('t300,20');
+	g_game.raphPaper.image('./images/thought.png', 500, 10, 108, 90);
+	g_game.special = g_game.raphPaper.image().attr({ opacity: 0.8 });
+	g_game.special.transform('t534,16');
+	g_game.raphPaper.rect(280,0,110,110).attr({ stroke: '#fff', 'stroke-width': 4 });
+	g_game.astro = g_game.raphPaper.image('./images/astro.png', 440, 20, 96, 96);
 	g_game.imgRocket = g_game.raphPaper.image('./images/rocket.png', 140, 0, 120, 480).attr({ opacity: 1 });
 	g_game.dropZone = g_game.raphPaper.rect(140, 100, 120, 240).attr({ fill: '#999', opacity: 0 });
 	
 	//g_game.raphPaper.setViewBox(0, 0, g_game.raphPaper.width/worldScale, g_game.raphPaper.height/worldScale);
-	g_game.timer = g_game.raphPaper.text(560, 140, '10').attr({ stroke: '#fff', fill: '#fff', 'font-size': '48pt', 'font-family': g_game.font });
-	g_game.scoreText = g_game.raphPaper.text(500, 400, '0').attr({ stroke: '#fff', fill: '#fff', 'font-size': '48pt', 'font-family': g_game.font });
+	g_game.timer = g_game.raphPaper.text(330, 140, '10').attr({ stroke: '#fff', fill: '#fff', 'font-size': '48pt', 'font-family': g_game.font });
+	//g_game.scoreText = g_game.raphPaper.text(500, 400, '0').attr({ stroke: '#fff', fill: '#fff', 'font-size': '48pt', 'font-family': g_game.font });
 	
 	g_game.splash = g_game.raphPaper.set();
 	g_game.splash.push(g_game.raphPaper.rect(140, 120, 360, 260).attr({ stroke: '#fff', fill: '#397E00', 'stroke-width': 6}));
@@ -156,21 +189,23 @@ function init() {
 		var cy = e.clientY-canvasPosition.y;
 		var size = g_game.objSize;
 		var shape = g_shapes[g_game.curShape];
-		g_game.curShape = (g_game.curShape + 1) % g_levels[g_game.curLevel].shapes.length;
-		previewShape();
+		//g_game.curShape = (g_game.curShape + 1) % g_levels[g_game.curLevel].shapes.length;
+		//previewShape();
 		
 		var body = createPolygon(cx, cy, shape, g_game.objSize);
 		g_game.bodies.push(body);
 		
-		var path = '';
+		/*var path = '';
 		for (var p=0;p<shape.vert.length;p++) {
 			for (var i=0;i<shape.vert[p].length;i++) {
 				path += (i == 0 ? 'M' : 'L') + (shape.vert[p][i][0] * size/2) + ' ' + (shape.vert[p][i][1] * size/2);
 			}
 		}
-		
-		var overlay = g_game.raphPaper.path(path).attr({ fill: '#999', opacity: 1 });
+		var overlay = g_game.raphPaper.path(path).attr({ opacity: 1, fill: 'url(./images/pizza.png)' });*/
+
+		var overlay = g_game.raphPaper.image('./images/' + shape.image + '.png', 0, 0, shape.w, shape.h);
 		overlay.game_size = size;
+		overlay.game_shapeId = g_game.curShape;
 		g_game.overlays.push(overlay);
 	});
 	
@@ -265,14 +300,15 @@ window.requestAnimFrame = (function(){
 
 function previewShape() {
 	var shape = g_shapes[g_game.curShape];
-	var path = '';
+	/*var path = '';
 	for (var p=0;p<shape.vert.length;p++) {
 		for (var i=0;i<shape.vert[p].length;i++) {
 			path += (i == 0 ? 'M' : 'L') + (shape.vert[p][i][0] * g_game.objSize/2) + ' ' + (shape.vert[p][i][1] * g_game.objSize/2);
 		}
 	}
-	
-	g_game.preview.attr({ path: path });
+	g_game.preview.attr({ path: path });*/
+	g_game.preview.attr({ src: './images/' + shape.image + '.png', width: shape.w, height: shape.h });
+	g_game.preview.show();
 	
 }
 	
@@ -288,6 +324,12 @@ function doGameLoop() {
 	}
 	else if (g_game.frame % 60 == 0) {
 		var timeLeft = 5 - Math.floor(g_game.frame/60);
+		if (timeLeft == 0) {
+			g_game.sounds.rocket.play();
+		}
+		else {
+			g_game.sounds[timeLeft].play();
+		}
 		g_game.timer.attr({ text: timeLeft });
 		if (timeLeft <= 0) {
 			// LAUNCH!!
@@ -312,9 +354,14 @@ function doGameLoop() {
 		g_game.overlays[i].transform('t' + x + ',' + y + 'r' + (angle * 180 / Math.PI) + ',0,0');
 		
 		if (g_game.bLaunched && !g_game.overlays[i].game_counted && y < 80) {
-			g_game.score += 100;
-			g_game.scoreText.attr({ text: g_game.score });
-			g_game.points.push(g_game.raphPaper.text(x, y, 100).attr({ fill: '#fff', 'font-family': g_game.font, 'font-size': '18pt' }));
+			var points = g_game.overlays[i].game_shapeId == g_levels[g_game.curLevel].special ? 200 : 100;
+			g_game.score += points;
+			setTimeout(function() {
+				g_game.sounds.points.stop().play();
+			}, 20 + Math.random() * 80);
+			
+			//g_game.scoreText.attr({ text: g_game.score });
+			g_game.points.push(g_game.raphPaper.text(x, y, points).attr({ fill: '#fff', 'font-family': g_game.font, 'font-size': '18pt' }));
 			g_game.overlays[i].game_counted = true;
 			g_game.overlays[i].hide();
 		}									
