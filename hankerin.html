@@ -3,7 +3,7 @@
 	Hankerin Rocket Jocks - an HTML5 game written for the Ludum Dare 27
 	Copyright (C) 2013 Jonas "sanojian" Olmstead
 	
-	Thanks for box2dweb and raphaeljs!
+	Thanks for box2dweb, buzzjs and raphaeljs!
 -->
 <html>
 	<title>Hankerin Rocket Jocks</title>
@@ -35,13 +35,24 @@ var g_game = {
 var g_shapes = [
 	{ image: 'burger', vert: [[[0,0],[3,0],[3,2],[0,2]]], w: 54, h: 36  },
 	{ image: 'pizza', vert: [[[2,0],[4,4],[0,4]]], w: 72, h: 72 },
-	//{ image: 'pizza', vert: [[[0,0],[2,0],[2,2],[0,2]],[[0,2],[4,2],[4,4],[0,4]]], w: 72, h: 72 },
 	{ image: 'chicken', vert: [[[0,0],[2,0],[2,2],[0,2]],[[2,0.5],[4,0.5],[4,1.5],[2,1.5]]], w: 72, h: 36 },
+	{ image: 'icecream', vert: [[[0,0],[2,0],[2,2],[1.25,4],[0,2]]], w: 36, h: 72 },
+	{ image: 'soda', vert: [[[0,0],[2,0],[2,4],[0,4]]], w: 36, h: 72 }
 ];
 
 var g_levels = [
-	{ title: 'INTRO', shapes: [0,1,2], points: 300, special: 0 },
-	{ title: 'TOUGHER', shapes: [0, 2], points: 400, special: 1 }
+	{ title: 'A HANKERING', shapes: [0], points: 300, special: 0 },
+	{ title: 'THIRSTY WORK', shapes: [0, 4], points: 500, special: 4 },
+	{ title: 'WHERE\S THE COLONEL?', shapes: [0, 2, 4], points: 600, special: 2 },
+	{ title: 'BY THE SLICE', shapes: [1, 4], points: 500, special: 1 },
+	{ title: 'JUST DESSERTS', shapes: [1, 3], points: 500, special: 3 },
+	{ title: 'MORE PIE PLEASE', shapes: [1, 4], points: 800, special: 1 },
+	{ title: 'A POWERFUL THIRST', shapes: [0, 4, 1], points: 1200, special: 4 },
+	{ title: 'THE MUNCHIES', shapes: [0, 1, 2], points: 2500, special: 0 },
+	{ title: 'MOUNTAIN PASS', shapes: [1, 3], points: 900, special: 1 },
+	{ title: 'THE CLASSIC', shapes: [0, 4, 3], points: 600, special: 3 },
+	{ title: 'ICE CREAM BUFFET', shapes: [2, 4, 3, 3, 3, 3, 3, 3, 3, 4], points: 1300, special: 2 },
+	{ title: 'THE FINAL SUPPER', shapes: [0, 1, 2, 4, 3], points: 1300, special: 4 }
 
 ];
 
@@ -58,9 +69,12 @@ function showSplash(bTestWin) {
 		if (g_game.score >= g_levels[g_game.curLevel].points) {
 			g_game.splash[6].attr({ text: 'SUCCESS!', fill: '#81A100' });
 			g_game.curLevel = Math.min(g_game.curLevel + 1, g_levels.length-1);
+			g_game.sounds.success.play();
+			g_game.success = true;
 		}
 		else {
 			g_game.splash[6].attr({ text: 'FAIL', fill: '#7B2008' });
+			g_game.sounds.fail.play();
 		}
 		g_game.splash.unclick().click(function() {
 			startLevel();
@@ -73,6 +87,8 @@ function showSplash(bTestWin) {
 			g_game.splash.hide();
 		});
 	
+		g_game.success = false;
+		g_game.astro.attr({ src: './images/astro_1.png' });
 	}
 	
 	g_game.bSplash = true;
@@ -100,7 +116,9 @@ function startLevel() {
 	}
 	
 	var specialShape = g_shapes[g_levels[g_game.curLevel].special];
-	g_game.special.attr({ src: './images/' + specialShape.image + '.png', width: specialShape.w, height: specialShape.h });
+	g_game.special.attr({ src: './images/' + specialShape.image + '.png', 
+						x: 72/2 - specialShape.w/2, y: 80/2 - specialShape.h/2,
+						width: specialShape.w, height: specialShape.h });
 	g_game.score = 0;
 	g_game.launchAcc = g_game.origAcc;
 	g_game.rocket_vY = 0;
@@ -135,13 +153,22 @@ function init() {
 		formats: [ "wav" ]	
 	});
 	g_game.sounds.rocket.setVolume(60);
+	g_game.sounds.success = new buzz.sound( "./audio/success", {
+		formats: [ "wav" ]	
+	});
+	g_game.sounds.fail = new buzz.sound( "./audio/fail", {
+		formats: [ "wav" ]	
+	});
 	
 	var world = new b2World(new b2Vec2(0, 10),true);
 	g_game.world = world;
 	
+	var myCanvas = document.getElementById('canvas');
+	myCanvas.style.left = (window.innerWidth/2 - 640/2) + 'px';
+	myCanvas.style.top = '0px';
 	var canvasPosition = getElementPosition(document.getElementById("canvas"));
 	
-	debugDraw();             
+	//debugDraw();             
 	
 	createBox(640,30,320,480,b2Body.b2_staticBody);
 	createBox(30,480,0,240,b2Body.b2_staticBody);
@@ -150,34 +177,33 @@ function init() {
 	g_game.rocket = createBox(120, 30, 200, 415, b2Body.b2_kinematicBody);
 	
 	var holder = document.getElementById('raphHolder');
-	holder.style.left = '0px';
+	holder.style.left = (window.innerWidth/2 - 640/2) + 'px';
 	holder.style.top = '0px';
 	g_game.raphPaper = Raphael("raphHolder");
-	//g_game.preview = g_game.raphPaper.path().attr({ fill: '#999', opacity: 0.3 });
+	g_game.raphPaper.rect(0, 0, 20, 480).attr({ fill: '#543873', 'stroke-width': 3 });
+	g_game.raphPaper.rect(620, 0, 20, 480).attr({ fill: '#543873', 'stroke-width': 3 });
+	g_game.raphPaper.rect(0, 460, 640, 20).attr({ fill: '#543873', 'stroke-width': 3 });
 	g_game.preview = g_game.raphPaper.image().attr({ opacity: 0.9 });
 	g_game.preview.transform('t300,20');
-	g_game.raphPaper.image('./images/thought.png', 500, 10, 108, 90);
+	g_game.raphPaper.image('./images/thought.png', 500, 10, 108, 90).attr({ opacity: 0.8 });
 	g_game.special = g_game.raphPaper.image().attr({ opacity: 0.8 });
 	g_game.special.transform('t534,16');
 	g_game.raphPaper.rect(280,0,110,110).attr({ stroke: '#fff', 'stroke-width': 4 });
-	g_game.astro = g_game.raphPaper.image('./images/astro.png', 440, 20, 96, 96);
+	g_game.astro = g_game.raphPaper.image('./images/astro_1.png', 440, 20, 96, 96);
 	g_game.imgRocket = g_game.raphPaper.image('./images/rocket.png', 140, 0, 120, 480).attr({ opacity: 1 });
 	g_game.dropZone = g_game.raphPaper.rect(140, 100, 120, 240).attr({ fill: '#999', opacity: 0 });
 	
-	//g_game.raphPaper.setViewBox(0, 0, g_game.raphPaper.width/worldScale, g_game.raphPaper.height/worldScale);
 	g_game.timer = g_game.raphPaper.text(330, 140, '10').attr({ stroke: '#fff', fill: '#fff', 'font-size': '48pt', 'font-family': g_game.font });
-	//g_game.scoreText = g_game.raphPaper.text(500, 400, '0').attr({ stroke: '#fff', fill: '#fff', 'font-size': '48pt', 'font-family': g_game.font });
 	
 	g_game.splash = g_game.raphPaper.set();
-	g_game.splash.push(g_game.raphPaper.rect(140, 120, 360, 260).attr({ stroke: '#fff', fill: '#397E00', 'stroke-width': 6}));
-	g_game.splash.push(g_game.raphPaper.text(320, 150, 'HANDERKIN\' ROCKET JOCKS').attr({ stroke: '#C4B59F', fill: '#C4B59F', opacity: 0.4, 'font-weight': 'bold', 'font-size': '20pt', 'font-family': g_game.font }));
+	g_game.splash.push(g_game.raphPaper.rect(140, 120, 360, 260).attr({ stroke: '#fff', fill: '#695B95', 'stroke-width': 6}));
+	g_game.splash.push(g_game.raphPaper.text(320, 150, 'HANKERIN\' ROCKET JOCKS').attr({ stroke: '#C4B59F', fill: '#C4B59F', opacity: 0.4, 'font-weight': 'bold', 'font-size': '20pt', 'font-family': g_game.font }));
 	g_game.splash.push(g_game.raphPaper.text(320, 190, 'LEVEL: 1').attr({ stroke: '#C4B59F', fill: '#C4B59F', 'font-weight': 'bold', 'font-size': '20pt', 'font-family': g_game.font }));
 	g_game.splash.push(g_game.raphPaper.text(320, 210, g_levels[g_game.curLevel].title).attr({ stroke: '#C4B59F', fill: '#C4B59F', 'font-weight': 'bold', 'font-size': '20pt', 'font-family': g_game.font }));
 	g_game.splash.push(g_game.raphPaper.text(320, 250, 'NEED: $' + g_levels[g_game.curLevel].points).attr({ stroke: '#C4B59F', fill: '#C4B59F', 'font-weight': 'bold', 'font-size': '22pt', 'font-family': g_game.font }));
 	g_game.splash.push(g_game.raphPaper.text(320, 270, 'GOT:  $' + g_levels[g_game.curLevel].points).attr({ stroke: '#C4B59F', fill: '#C4B59F', 'font-weight': 'bold', 'font-size': '22pt', 'font-family': g_game.font }));
 	g_game.splash.push(g_game.raphPaper.text(320, 320, 'SUCCESS!').attr({ stroke: '#1C2222', fill: '#81A100', 'stroke-width': 3, 'font-weight': 'bold', 'font-size': '48pt', 'font-family': g_game.font }));
 	g_game.splash.push(g_game.raphPaper.text(320, 360, 'CLICK TO CONTINUE').attr({ stroke: '#C4B59F', opacity: 0.3, fill: '#C4B59F', 'font-weight': 'bold', 'font-size': '18pt', 'font-family': g_game.font }));
-	//showSplash(false);
 	
 	startLevel();
 	
@@ -188,24 +214,14 @@ function init() {
 		var cx = e.clientX-canvasPosition.x;
 		var cy = e.clientY-canvasPosition.y;
 		var size = g_game.objSize;
-		var shape = g_shapes[g_game.curShape];
-		//g_game.curShape = (g_game.curShape + 1) % g_levels[g_game.curLevel].shapes.length;
-		//previewShape();
+		var shape = g_shapes[g_levels[g_game.curLevel].shapes[g_game.curShape]];
 		
 		var body = createPolygon(cx, cy, shape, g_game.objSize);
 		g_game.bodies.push(body);
 		
-		/*var path = '';
-		for (var p=0;p<shape.vert.length;p++) {
-			for (var i=0;i<shape.vert[p].length;i++) {
-				path += (i == 0 ? 'M' : 'L') + (shape.vert[p][i][0] * size/2) + ' ' + (shape.vert[p][i][1] * size/2);
-			}
-		}
-		var overlay = g_game.raphPaper.path(path).attr({ opacity: 1, fill: 'url(./images/pizza.png)' });*/
-
 		var overlay = g_game.raphPaper.image('./images/' + shape.image + '.png', 0, 0, shape.w, shape.h);
 		overlay.game_size = size;
-		overlay.game_shapeId = g_game.curShape;
+		overlay.game_shapeId = g_levels[g_game.curLevel].shapes[g_game.curShape];
 		g_game.overlays.push(overlay);
 	});
 	
@@ -299,22 +315,21 @@ window.requestAnimFrame = (function(){
 })();
 
 function previewShape() {
-	var shape = g_shapes[g_game.curShape];
-	/*var path = '';
-	for (var p=0;p<shape.vert.length;p++) {
-		for (var i=0;i<shape.vert[p].length;i++) {
-			path += (i == 0 ? 'M' : 'L') + (shape.vert[p][i][0] * g_game.objSize/2) + ' ' + (shape.vert[p][i][1] * g_game.objSize/2);
-		}
-	}
-	g_game.preview.attr({ path: path });*/
-	g_game.preview.attr({ src: './images/' + shape.image + '.png', width: shape.w, height: shape.h });
+	var shape = g_shapes[g_levels[g_game.curLevel].shapes[g_game.curShape]];
+	g_game.preview.attr({ src: './images/' + shape.image + '.png', 
+							x: 72/2 - shape.w/2, y: 80/2 - shape.h/2,
+							width: shape.w, height: shape.h });
 	g_game.preview.show();
-	
 }
 	
 function doGameLoop() {
 	
 	if (g_game.bSplash) {
+		if (g_game.success) {
+			var animFrame = 1 + Math.floor(g_game.frame/30) % 2;
+			g_game.astro.attr({ src: './images/astro_cheer' + animFrame + '.png' });
+			g_game.frame++;
+		}
 		return;
 	}
 	else if (g_game.bLaunched) {
@@ -354,14 +369,15 @@ function doGameLoop() {
 		g_game.overlays[i].transform('t' + x + ',' + y + 'r' + (angle * 180 / Math.PI) + ',0,0');
 		
 		if (g_game.bLaunched && !g_game.overlays[i].game_counted && y < 80) {
-			var points = g_game.overlays[i].game_shapeId == g_levels[g_game.curLevel].special ? 200 : 100;
+			var points = g_game.overlays[i].game_shapeId == g_levels[g_game.curLevel].special ? 400 : 100;
+			var adjust = g_game.overlays[i].game_shapeId == g_levels[g_game.curLevel].special ? -32 : 0;
 			g_game.score += points;
 			setTimeout(function() {
 				g_game.sounds.points.stop().play();
 			}, 20 + Math.random() * 80);
 			
 			//g_game.scoreText.attr({ text: g_game.score });
-			g_game.points.push(g_game.raphPaper.text(x, y, points).attr({ fill: '#fff', 'font-family': g_game.font, 'font-size': '18pt' }));
+			g_game.points.push(g_game.raphPaper.text(x, y + adjust, points).attr({ fill: '#fff', 'font-family': g_game.font, 'font-size': '18pt', 'font-weight': 'bold' }));
 			g_game.overlays[i].game_counted = true;
 			g_game.overlays[i].hide();
 		}									
@@ -371,6 +387,8 @@ function doGameLoop() {
 		showSplash(true);
 	}
 	
+		var animFrame = 1 + Math.floor(g_game.frame/90) % 4;
+		g_game.astro.attr({ src: './images/astro_' + animFrame + '.png' });
 	g_game.frame++;
 	
 }
@@ -392,7 +410,7 @@ function doGameLoop() {
 		
 	</head>
 	<body onload="init()">
-		<canvas id="canvas" width="640" height="480" style="background-color:#333333;" ></canvas>
+		<canvas id="canvas" width="640" height="480" style="position: absolute; background-color:#333333;" ></canvas>
 		<div id="raphHolder" unselectable="on" class="unselectable" style="position: absolute; width: 640px; height: 480px;" />
 	</body>
 </html>
