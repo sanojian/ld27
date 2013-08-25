@@ -338,7 +338,7 @@ function doGameLoop() {
 		g_game.rocket.SetLinearVelocity(new Box2D.Common.Math.b2Vec2(0, g_game.rocket_vY));	
 	}
 	else if (g_game.frame % 60 == 0) {
-		var timeLeft = 5 - Math.floor(g_game.frame/60);
+		var timeLeft = 10 - Math.floor(g_game.frame/60);
 		if (timeLeft == 0) {
 			g_game.sounds.rocket.play();
 		}
